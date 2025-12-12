@@ -64,5 +64,5 @@ def cron_send():
         send_message(f"🌡️Температура: {current_temp}°C\n💧Влажность: {current_hum}%")
     return "sent"
 
-if name == "__main__":
+if __name__ == "__main__":
     app.run()
