@@ -25,8 +25,17 @@ def receive_data():
     global current_temp, current_hum, last_update
 
     data = request.json
+    print("Получено POST:", request.data)  # печатаем сырые данные
+    print("Parsed JSON:", data)
+
+    if not data:
+        return "Bad Request: no JSON received", 400
+
     temp = data.get("temp")
     hum = data.get("hum")
+
+    if temp is None or hum is None:
+        return "Bad Request: missing temp or hum", 400
 
     current_temp = temp
     current_hum = hum
