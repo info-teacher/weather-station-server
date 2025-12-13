@@ -1,64 +1,176 @@
-from flask import Flask, request
+from flask import Flask, request, send_file
 import requests
 import time
+import io
+import matplotlib.pyplot as plt
+
+# ===== TELEGRAM =====
 
 TOKEN = "8513191267:AAE1_qvgvjHR4g5-cONFN4CB-r_NtM4rHdk"
 CHAT_ID = "945281794"
 
 app = Flask(__name__)
 
+
+# ===== ДАННЫЕ =====
 current_temp = None
 current_hum = None
 last_update = 0
 
+history = []  # (time, temp, hum)
+last_alert_time = 0
+ALERT_INTERVAL = 1800  # 30 минут
+
+# ===== НОРМЫ =====
 ROOM = {
     "temp": (20, 24),
     "hum": (40, 60)
 }
 
+# ===== TELEGRAM =====
 def send_message(text):
-    requests.get(f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-                 params={"chat_id": CHAT_ID, "text": text})
+    requests.get(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        params={"chat_id": CHAT_ID, "text": text}
+    )
 
+# ===== DATA =====
 @app.route("/data", methods=["POST"])
 def receive_data():
-    global current_temp, current_hum, last_update
+    global current_temp, current_hum, last_update, history
 
     data = request.json
-    print("Получено POST:", request.data)  # печатаем сырые данные
-    print("Parsed JSON:", data)
-
-    if not data:
-        return "Bad Request: no JSON received", 400
-
-    temp = data.get("temp")
-    hum = data.get("hum")
-
-    if temp is None or hum is None:
-        return "Bad Request: missing temp or hum", 400
-
-    current_temp = temp
-    current_hum = hum
+    current_temp = data.get("temp")
+    current_hum = data.get("hum")
     last_update = time.time()
 
-    check_values(temp, hum)
+    history.append((last_update, current_temp, current_hum))
+    history = history[-100:]
 
+    check_values()
     return {"status": "ok"}
 
-def check_values(temp, hum):
-    t_min, t_max = ROOM["temp"]
-    h_min, h_max = ROOM["hum"]
+# ===== ПРОВЕРКА =====
+def check_values():
+    global last_alert_time
 
-    if temp < t_min:
-        send_message(f"⚠️ Температура низкая: {temp}°C. Подними отопление или закрой окна.")
-    elif temp > t_max:
-        send_message(f"⚠️ Температура высокая: {temp}°C. Проветри помещение.")
+    if current_temp is None:
+        return
 
-    if hum < h_min:
-        send_message(f"⚠️ Влажность низкая: {hum}%. Нужно увлажнить воздух.")
-    elif hum > h_max:
-        send_message(f"⚠️ Влажность высокая: {hum}%. Проветри или уменьшай испарения.")
+    now = time.time()
+    if now - last_alert_time < ALERT_INTERVAL:
+        return
 
+    alerts, advice, health = [], [], []
+
+    tmin, tmax = ROOM["temp"]
+    hmin, hmax = ROOM["hum"]
+
+    # Температура
+    if current_temp < tmin:
+        alerts.append("🧊 Холодно")
+        health.append("риск простуды")
+        advice.append("повысить отопление")
+    elif current_temp > tmax:
+        alerts.append("🥵 Жарко")
+        health.append("ухудшение сна и концентрации")
+        advice.append("проветрить помещение")
+
+    # Влажность
+    if current_hum < hmin:
+        alerts.append("🌵 Сухо")
+        health.append("сухость кожи и слизистых")
+        advice.append("использовать увлажнитель")
+    elif current_hum > hmax:
+        alerts.append("🌫 Влажно")
+        health.append("риск плесени")
+        advice.append("проветривание")
+
+    sleep_text = sleep_impact()
+    forecast = generate_forecast()
+
+    if alerts:
+        msg = "🏠 Состояние комнаты\n\n"
+        msg += f"🌡 {current_temp}°C\n💧 {current_hum}%\n\n"
+
+        msg += "⚠️ Проблемы:\n"
+        for a in alerts:
+            msg += f"• {a}\n"
+
+        msg += "\n🩺 Возможные эффекты:\n"
+        for h in health:
+            msg += f"• {h}\n"
+
+        msg += "\n💡 Советы:\n"
+        for a in advice:
+            msg += f"• {a}\n"
+
+        if sleep_text:
+            msg += f"\n😴 Сон:\n{sleep_text}"
+
+        if forecast:
+            msg += f"\n🔮 Прогноз:\n{forecast}"
+
+        send_message(msg)
+        last_alert_time = now
+
+# ===== ПРОГНОЗ =====
+def generate_forecast():
+    if len(history) < 6:
+        return None
+
+    t0, temp0, hum0 = history[0]
+    t1, temp1, hum1 = history[-1]
+
+    dt = t1 - t0
+    if dt == 0:
+        return None
+
+    temp_trend = (temp1 - temp0) / dt * 3600
+    hum_trend = (hum1 - hum0) / dt * 3600
+
+    text = ""
+    if temp_trend > 0.5:
+        text += "🌡 Температура растёт\n"
+    if hum_trend < -1:
+        text += "💧 Влажность падает\n"
+
+    return text if text else None
+
+# ===== СОН =====
+def sleep_impact():
+    if not (18 <= current_temp <= 23):
+        return "❌ Может быть трудно уснуть"
+    if not (45 <= current_hum <= 60):
+        return "⚠️ Сон может быть поверхностным"
+    return "✅ Условия комфортны для сна"
+
+# ===== ГРАФИК =====
+@app.route("/graph")
+def graph():
+    if not history:
+        return "Нет данных"
+
+    times = [h[0] for h in history]
+    temps = [h[1] for h in history]
+    hums = [h[2] for h in history]
+
+    plt.figure(figsize=(10,5))
+    plt.plot(times, temps, label="Температура")
+    plt.plot(times, hums, label="Влажность")
+    plt.legend()
+    plt.title("Климат в помещении")
+    plt.xlabel("Время")
+    plt.ylabel("Значение")
+
+    img = io.BytesIO()
+    plt.savefig(img, format='png')
+    plt.close()
+    img.seek(0)
+
+    return send_file(img, mimetype='image/png')
+
+# ===== STATUS =====
 @app.route("/status")
 def status():
     return {
@@ -67,11 +179,6 @@ def status():
         "last_update": last_update
     }
 
-@app.route("/cron")
-def cron_send():
-    if current_temp is not None:
-        send_message(f"🌡️Температура: {current_temp}°C\n💧Влажность: {current_hum}%")
-    return "sent"
-
 if __name__ == "__main__":
     app.run()
+    
