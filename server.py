@@ -5,12 +5,10 @@ import io
 import matplotlib.pyplot as plt
 
 # ===== TELEGRAM =====
-
 TOKEN = "8513191267:AAE1_qvgvjHR4g5-cONFN4CB-r_NtM4rHdk"
 CHAT_ID = "945281794"
 
 app = Flask(__name__)
-
 
 # ===== ДАННЫЕ =====
 current_temp = None
@@ -18,8 +16,14 @@ current_hum = None
 last_update = 0
 
 history = []  # (time, temp, hum)
-last_alert_time = 0
-ALERT_INTERVAL = 1800  # 30 минут
+
+# ===== ФЛАГИ СОСТОЯНИЯ =====
+alert_flags = {
+    "temp_low": False,
+    "temp_high": False,
+    "hum_low": False,
+    "hum_high": False
+}
 
 # ===== НОРМЫ =====
 ROOM = {
@@ -52,13 +56,9 @@ def receive_data():
 
 # ===== ПРОВЕРКА =====
 def check_values():
-    global last_alert_time
+    global alert_flags
 
     if current_temp is None:
-        return
-
-    now = time.time()
-    if now - last_alert_time < ALERT_INTERVAL:
         return
 
     alerts, advice, health = [], [], []
@@ -71,20 +71,42 @@ def check_values():
         alerts.append("🧊 Холодно")
         health.append("риск простуды")
         advice.append("повысить отопление")
+        if not alert_flags["temp_low"]:
+            send_message(f"⚠️ Температура низкая: {current_temp}°C. Проверьте отопление!")
+            alert_flags["temp_low"] = True
+        alert_flags["temp_high"] = False
     elif current_temp > tmax:
         alerts.append("🥵 Жарко")
         health.append("ухудшение сна и концентрации")
         advice.append("проветрить помещение")
+        if not alert_flags["temp_high"]:
+            send_message(f"⚠️ Температура высокая: {current_temp}°C. Проветрите помещение!")
+            alert_flags["temp_high"] = True
+        alert_flags["temp_low"] = False
+    else:
+        alert_flags["temp_low"] = False
+        alert_flags["temp_high"] = False
 
     # Влажность
     if current_hum < hmin:
         alerts.append("🌵 Сухо")
         health.append("сухость кожи и слизистых")
         advice.append("использовать увлажнитель")
+        if not alert_flags["hum_low"]:
+            send_message(f"⚠️ Влажность низкая: {current_hum}%. Используйте увлажнитель!")
+            alert_flags["hum_low"] = True
+        alert_flags["hum_high"] = False
     elif current_hum > hmax:
         alerts.append("🌫 Влажно")
         health.append("риск плесени")
         advice.append("проветривание")
+        if not alert_flags["hum_high"]:
+            send_message(f"⚠️ Влажность высокая: {current_hum}%. Проветрите помещение!")
+            alert_flags["hum_high"] = True
+        alert_flags["hum_low"] = False
+    else:
+        alert_flags["hum_low"] = False
+        alert_flags["hum_high"] = False
 
     sleep_text = sleep_impact()
     forecast = generate_forecast()
@@ -92,27 +114,13 @@ def check_values():
     if alerts:
         msg = "🏠 Состояние комнаты\n\n"
         msg += f"🌡 {current_temp}°C\n💧 {current_hum}%\n\n"
-
-        msg += "⚠️ Проблемы:\n"
-        for a in alerts:
-            msg += f"• {a}\n"
-
-        msg += "\n🩺 Возможные эффекты:\n"
-        for h in health:
-            msg += f"• {h}\n"
-
-        msg += "\n💡 Советы:\n"
-        for a in advice:
-            msg += f"• {a}\n"
-
+        msg += "⚠️ Проблемы:\n" + "\n".join(f"• {a}" for a in alerts)
+        msg += "\n\n🩺 Возможные эффекты:\n" + "\n".join(f"• {h}" for h in health)
+        msg += "\n\n💡 Советы:\n" + "\n".join(f"• {a}" for a in advice)
         if sleep_text:
-            msg += f"\n😴 Сон:\n{sleep_text}"
-
+            msg += f"\n\n😴 Сон:\n{sleep_text}"
         if forecast:
-            msg += f"\n🔮 Прогноз:\n{forecast}"
-
-        send_message(msg)
-        last_alert_time = now
+            msg += f"\n\n🔮 Прогноз:\n{forecast}"
 
 # ===== ПРОГНОЗ =====
 def generate_forecast():
@@ -181,4 +189,3 @@ def status():
 
 if __name__ == "__main__":
     app.run()
-    
