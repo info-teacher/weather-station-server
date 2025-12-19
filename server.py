@@ -4,13 +4,13 @@ import time
 import io
 import matplotlib.pyplot as plt
 
-# ===== TELEGRAM =====
+# TELEGRAM
 TOKEN = "8513191267:AAE1_qvgvjHR4g5-cONFN4CB-r_NtM4rHdk"
 CHAT_ID = "945281794"
 
 app = Flask(__name__)
 
-# ===== ДАННЫЕ =====
+# ДАННЫЕ
 current_temp = None
 current_hum = None
 last_update = 0
@@ -19,20 +19,21 @@ history = []  # (time, temp, hum)
 last_alert_time = 0
 ALERT_INTERVAL = 1800  # 30 минут
 
-# ===== НОРМЫ =====
+# НОРМЫ 
 ROOM = {
     "temp": (20, 24),
     "hum": (40, 60)
 }
 
-# ===== TELEGRAM =====
+#TELEGRAM
 def send_message(text):
+    # Отправляем сообщение в Telegram
     requests.get(
         f"https://api.telegram.org/bot{TOKEN}/sendMessage",
         params={"chat_id": CHAT_ID, "text": text}
     )
 
-# ===== DATA =====
+# DATA
 @app.route("/data", methods=["POST"])
 def receive_data():
     global current_temp, current_hum, last_update, history
@@ -43,22 +44,22 @@ def receive_data():
     last_update = time.time()
 
     history.append((last_update, current_temp, current_hum))
-    history = history[-100:]
+    history = history[-100:]  # храним последние 100 точек
 
-    check_values()
+    check_values()  # проверяем отклонения и отправляем Telegram
     return {"status": "ok"}
 
-# ===== ПРОВЕРКА =====
+# ПРОВЕРКА
 def check_values():
     alerts, advice, health = [], [], []
 
     tmin, tmax = ROOM["temp"]
     hmin, hmax = ROOM["hum"]
 
-    # Температура
     if current_temp is None:
         return
 
+    #Температурные отклонения
     if current_temp < tmin:
         alerts.append("🧊 Холодно")
         health.append("риск простуды")
@@ -78,7 +79,7 @@ def check_values():
         health.append("риск плесени")
         advice.append("проветривание")
 
-    # Если есть превышения – формируем сообщение
+    # Если есть превышения – формируем сообщение для Telegram
     if alerts:
         msg = "🏠 Состояние комнаты\n\n"
         msg += f"🌡 {current_temp}°C\n💧 {current_hum}%\n\n"
@@ -105,7 +106,7 @@ def check_values():
 
         send_message(msg)
 
-# ===== ПРОГНОЗ =====
+# ПРОГНОЗ
 def generate_forecast():
     if len(history) < 6:
         return None
@@ -128,7 +129,7 @@ def generate_forecast():
 
     return text if text else None
 
-# ===== СОН =====
+#  СОН
 def sleep_impact():
     if not (18 <= current_temp <= 23):
         return "❌ Может быть трудно уснуть"
@@ -136,7 +137,7 @@ def sleep_impact():
         return "⚠️ Сон может быть поверхностным"
     return "✅ Условия комфортны для сна"
 
-# ===== ГРАФИК =====
+# ГРАФИК 
 @app.route("/graph")
 def graph():
     if not history:
@@ -161,13 +162,30 @@ def graph():
 
     return send_file(img, mimetype='image/png')
 
-# ===== STATUS =====
+# STATUS 
 @app.route("/status")
 def status():
+    """
+    Возвращает текущие значения и флаги тревоги,
+    чтобы браузер мог воспроизвести звук.
+    """
+    tmin, tmax = ROOM["temp"]
+    hmin, hmax = ROOM["hum"]
+
+    tempAlert = False
+    humAlert = False
+
+    if current_temp is not None:
+        tempAlert = current_temp < tmin or current_temp > tmax
+    if current_hum is not None:
+        humAlert = current_hum < hmin or current_hum > hmax
+
     return {
         "temperature": current_temp,
         "humidity": current_hum,
-        "last_update": last_update
+        "last_update": last_update,
+        "tempAlert": tempAlert,   # <- тревога по температуре для браузера
+        "humAlert": humAlert      # <- тревога по влажности для браузера
     }
 
 if __name__ == "__main__":
