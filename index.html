@@ -33,10 +33,13 @@ async function checkData() {
     const data = await response.json();
 
     // Если есть тревога и звук включён
-    if ((data.tempAlert || data.humAlert) && soundEnabled) {
-      document.getElementById("alertSound").play();
-      document.getElementById("status").innerText = "⚠️ Есть отклонение!";
-    } else {
+   if ((data.tempAlert || data.humAlert) && soundEnabled) {
+  const audio = document.getElementById("alertSound");
+  audio.play().catch(err => {
+    console.warn("Не удалось воспроизвести звук:", err);
+  });
+  document.getElementById("status").innerText = "⚠️ Есть отклонение!";
+  } else {
       document.getElementById("status").innerText = "✅ Всё нормально";
     }
   } catch(err) {
