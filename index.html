@@ -39,7 +39,7 @@ async function checkData() {
     console.warn("Не удалось воспроизвести звук:", err);
   });
   document.getElementById("status").innerText = "⚠️ Есть отклонение!";
-  } else {
+} else {
       document.getElementById("status").innerText = "✅ Всё нормально";
     }
   } catch(err) {
