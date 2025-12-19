@@ -1,16 +1,15 @@
-from flask import Flask, request, send_file
-
+from flask import Flask, request, send_file, send_from_directory  # <-- добавил send_from_directory
 from flask_cors import CORS  
 import time
 import io
 import matplotlib.pyplot as plt
+import requests  # <-- добавил, чтобы send_message работал
+import os  # <-- добавил для корректного пути к index.html
 
-app = Flask(__name__)
+app = Flask(__name__)  # оставляем только один раз
 CORS(app)  
 TOKEN = "8513191267:AAE1_qvgvjHR4g5-cONFN4CB-r_NtM4rHdk"
 CHAT_ID = "945281794"
-
-app = Flask(__name__)
 
 # ДАННЫЕ
 current_temp = None
@@ -167,10 +166,6 @@ def graph():
 # STATUS 
 @app.route("/status")
 def status():
-    """
-    Возвращает текущие значения и флаги тревоги,
-    чтобы браузер мог воспроизвести звук.
-    """
     tmin, tmax = ROOM["temp"]
     hmin, hmax = ROOM["hum"]
 
@@ -189,8 +184,11 @@ def status():
         "tempAlert": tempAlert,   # <- тревога по температуре для браузера
         "humAlert": humAlert      # <- тревога по влажности для браузера
     }
+
 @app.route("/")
 def index():
-    return send_from_directory(".", "index.html")
+    # исправленный путь к index.html, чтобы Render точно видел файл
+    return send_from_directory(os.path.dirname(__file__), "index.html")
+
 if __name__ == "__main__":
     app.run()
