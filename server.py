@@ -189,6 +189,8 @@ def status():
         "tempAlert": tempAlert,   # <- тревога по температуре для браузера
         "humAlert": humAlert      # <- тревога по влажности для браузера
     }
-
-if __name__ == "__main__":
+@app.route("/")
+def index():
+    return send_from_directory(".", "index.html")
+    if __name__ == "__main__":
     app.run()
