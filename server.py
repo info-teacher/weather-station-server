@@ -1,10 +1,12 @@
 from flask import Flask, request, send_file
-import requests
+
+from flask_cors import CORS  
 import time
 import io
 import matplotlib.pyplot as plt
 
-# TELEGRAM
+app = Flask(__name__)
+CORS(app)  
 TOKEN = "8513191267:AAE1_qvgvjHR4g5-cONFN4CB-r_NtM4rHdk"
 CHAT_ID = "945281794"
 
