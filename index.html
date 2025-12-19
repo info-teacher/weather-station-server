@@ -15,7 +15,42 @@
 <!-- Звуковой файл -->
 <audio id="alertSound" src="alert.mp3"></audio>
 
-<!-- Подключаем скрипт -->
-<script src="script.js"></script>
+<!-- Встроенный скрипт -->
+<script>
+// Переменная для включения/выключения звука
+let soundEnabled = true;
+
+// Функция для кнопки «Вкл/Выкл звук»
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  alert("Звук " + (soundEnabled ? "включён" : "выключен"));
+}
+
+// Функция для опроса сервера
+async function checkData() {
+  try {
+    const response = await fetch("https://weather-station-server-2dlf.onrender.com/status"); // <- здесь URL сервера
+    const data = await response.json();
+
+    // Если есть тревога и звук включён
+    if ((data.tempAlert || data.humAlert) && soundEnabled) {
+      document.getElementById("alertSound").play();
+      document.getElementById("status").innerText = "⚠️ Есть отклонение!";
+    } else {
+      document.getElementById("status").innerText = "✅ Всё нормально";
+    }
+  } catch(err) {
+    console.error("Ошибка при получении данных:", err);
+    document.getElementById("status").innerText = "Ошибка соединения";
+  }
+}
+
+// Проверяем сервер каждые 30 секунд
+setInterval(checkData, 30000);
+
+// Запуск сразу при загрузке страницы
+checkData();
+</script>
+
 </body>
 </html>
